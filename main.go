@@ -6,6 +6,7 @@ import (
 	"myapi/HTTP-Serveur/Go_API-Coffee-Shop/models"
 	"net/http"
 	"time"
+
 	"github.com/gorilla/mux"
 )
 
@@ -79,7 +80,7 @@ func createOrder(w http.ResponseWriter, r *http.Request) {
 
 	// Compléter les champs
 	order.DrinkName = selectedDrink.Name
-	order.Status = StatusPending
+	/*order.Status = StatusPending*/
 	order.OrderedAt = time.Now()
 	order.TotalPrice = calculatePrice(*selectedDrink, order.Size, order.Extras)
 
