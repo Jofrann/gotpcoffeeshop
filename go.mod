@@ -1,4 +1,4 @@
-module github.com/Jofrann/Go-TP-API-Coffee-Shop-avec-Mux-
+module gotpcoffeeshop
 
 go 1.22
 

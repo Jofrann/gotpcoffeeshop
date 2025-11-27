@@ -3,76 +3,119 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"myapi/HTTP-Serveur/Go_API-Coffee-Shop/models"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
 )
 
-var drinks []models.Drink
-var orders []models.Order
-var orderCounter int = 1
+//
+// ────────────────────────────────────────────────
+//   STRUCTURES & DONNÉES
+// ────────────────────────────────────────────────
+//
 
-func generateOrderID() string {
-	id := fmt.Sprintf("ORD-%03d", orderCounter)
-	orderCounter++
-	return id
+// Drink représente une boisson du menu
+type Drink struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Category  string  `json:"category"` // coffee, tea, cold
+	BasePrice float64 `json:"base_price"`
 }
 
+// OrderStatus représente l'état d'une commande
+type OrderStatus string
+
+const (
+	StatusPending   OrderStatus = "pending"
+	StatusPreparing OrderStatus = "preparing"	
+	StatusReady     OrderStatus = "ready"
+	StatusPickedUp  OrderStatus = "picked-up"	
+	StatusCancelled OrderStatus = "cancelled"
+)
+
+// Order représente une commande
+type Order struct {
+	ID           string      `json:"id"`
+	DrinkID      string      `json:"drink_id"`
+	DrinkName    string      `json:"drink_name"`
+	Size         string      `json:"size"`
+	Extras       []string    `json:"extras"`
+	CustomerName string      `json:"customer_name"`
+	Status       OrderStatus `json:"status"`
+	TotalPrice   float64     `json:"total_price"`
+	OrderedAt    time.Time   `json:"ordered_at"`
+}
+
+// Base mémoire
+var drinks []Drink
+var orders []Order
+var orderCounter int = 1
+
+//
+// ────────────────────────────────────────────────
+//   HANDLERS MENU
+// ────────────────────────────────────────────────
+//
+
 // GET /menu
-func getMenuHandler(w http.ResponseWriter, r *http.Request) {
+func getMenu(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(drinks)
 }
 
 // GET /menu/{id}
-func getDrinkHandler(w http.ResponseWriter, r *http.Request) {
+func getDrink(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := mux.Vars(r)["id"]
 
-	for _, drink := range drinks {
-		if drink.ID == id {
-			json.NewEncoder(w).Encode(drink)
+	for _, d := range drinks {
+		if d.ID == id {
+			json.NewEncoder(w).Encode(d)
 			return
 		}
 	}
 
-	w.WriteHeader(http.StatusNotFound)
-	json.NewEncoder(w).Encode(map[string]string{"error": "Boisson non trouvée"})
+	http.Error(w, "Boisson introuvable", http.StatusNotFound)
 }
+
+//
+// ────────────────────────────────────────────────
+//   HANDLERS COMMANDES
+// ────────────────────────────────────────────────
+//
 
 // POST /orders
 func createOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var order models.Order
+	var order Order
 	if err := json.NewDecoder(r.Body).Decode(&order); err != nil {
-		http.Error(w, "JSON invalide", http.StatusBadRequest)
+		http.Error(w, "Body JSON invalide", http.StatusBadRequest)
 		return
 	}
 
-	// Boisson ?
-	var selectedDrink *models.Drink
+	// Vérifier boisson
+	var drink *Drink
 	for _, d := range drinks {
 		if d.ID == order.DrinkID {
-			selectedDrink = &d
+			drink = &d
 			break
 		}
 	}
-
-	if selectedDrink == nil {
+	if drink == nil {
 		http.Error(w, "Boisson introuvable", http.StatusBadRequest)
 		return
 	}
 
-	order.ID = generateOrderID()
-	order.DrinkName = selectedDrink.Name
+	// Remplir
+	order.ID = fmt.Sprintf("ORD-%03d", orderCounter)
+	orderCounter++
+	order.DrinkName = drink.Name
+	order.Status = StatusPending
 	order.OrderedAt = time.Now()
-	order.Status = models.StatusPending
-	order.TotalPrice = calculatePrice(selectedDrink.BasePrice, order.Size, order.Extras)
+	order.TotalPrice = calculatePrice(drink.BasePrice, order.Size, order.Extras)
 
 	orders = append(orders, order)
 
@@ -81,7 +124,7 @@ func createOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /orders
-func getOrdersHandler(w http.ResponseWriter, r *http.Request) {
+func getOrders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(orders)
 }
@@ -90,26 +133,23 @@ func getOrdersHandler(w http.ResponseWriter, r *http.Request) {
 func getOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := mux.Vars(r)["id"]
 
-	for _, order := range orders {
-		if order.ID == id {
-			json.NewEncoder(w).Encode(order)
+	for _, o := range orders {
+		if o.ID == id {
+			json.NewEncoder(w).Encode(o)
 			return
 		}
 	}
 
-	w.WriteHeader(http.StatusNotFound)
-	json.NewEncoder(w).Encode(map[string]string{"error": "Commande introuvable"})
+	http.Error(w, "Commande introuvable", http.StatusNotFound)
 }
 
 // PATCH /orders/{id}/status
 func updateOrderStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := mux.Vars(r)["id"]
 
 	var payload struct {
 		Status string `json:"status"`
@@ -120,28 +160,26 @@ func updateOrderStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for i, order := range orders {
-		if order.ID == id {
-			orders[i].Status = models.OrderStatus(payload.Status)
+	for i, o := range orders {
+		if o.ID == id {
+			orders[i].Status = OrderStatus(payload.Status)
 			json.NewEncoder(w).Encode(orders[i])
 			return
 		}
 	}
 
-	w.WriteHeader(http.StatusNotFound)
-	json.NewEncoder(w).Encode(map[string]string{"error": "Commande introuvable"})
+	http.Error(w, "Commande introuvable", http.StatusNotFound)
 }
 
 // DELETE /orders/{id}
 func deleteOrder(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := mux.Vars(r)["id"]
 
-	for i, order := range orders {
-		if order.ID == id {
+	for i, o := range orders {
+		if o.ID == id {
 
-			if order.Status == models.StatusPickedUp {
-				http.Error(w, "Impossible : commande déjà récupérée", http.StatusBadRequest)
+			if o.Status == StatusPickedUp {
+				http.Error(w, "Commande déjà récupérée", http.StatusBadRequest)
 				return
 			}
 
@@ -153,6 +191,12 @@ func deleteOrder(w http.ResponseWriter, r *http.Request) {
 
 	http.Error(w, "Commande introuvable", http.StatusNotFound)
 }
+
+//
+// ────────────────────────────────────────────────
+//   PRIX
+// ────────────────────────────────────────────────
+//
 
 func calculatePrice(basePrice float64, size string, extras []string) float64 {
 	price := basePrice
@@ -171,7 +215,13 @@ func calculatePrice(basePrice float64, size string, extras []string) float64 {
 	return price
 }
 
-func cors(next http.Handler) http.Handler {
+//
+// ────────────────────────────────────────────────
+//   CORS
+// ────────────────────────────────────────────────
+//
+
+func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
@@ -186,32 +236,37 @@ func cors(next http.Handler) http.Handler {
 	})
 }
 
+//
+// ────────────────────────────────────────────────
+//   MAIN
+// ────────────────────────────────────────────────
+//
+
 func main() {
 
-	drinks = []models.Drink{
-		{ID: "DRK-001", Name: "Espresso", Category: "coffee", BasePrice: 2.50},
-		{ID: "DRK-002", Name: "Cappuccino", Category: "coffee", BasePrice: 3.50},
-		{ID: "DRK-003", Name: "Latte", Category: "coffee", BasePrice: 4.00},
-		{ID: "DRK-004", Name: "Americano", Category: "coffee", BasePrice: 3.00},
-		{ID: "DRK-005", Name: "Green Tea", Category: "tea", BasePrice: 2.50},
-		{ID: "DRK-006", Name: "Iced Coffee", Category: "coffee", BasePrice: 4.50},
+	drinks = []Drink{
+		{ID: "1", Name: "Espresso", Category: "coffee", BasePrice: 2.50},
+		{ID: "2", Name: "Cappuccino", Category: "coffee", BasePrice: 3.50},
+		{ID: "3", Name: "Latte", Category: "coffee", BasePrice: 4.00},
+		{ID: "4", Name: "Americano", Category: "coffee", BasePrice: 3.00},
+		{ID: "5", Name: "Green Tea", Category: "tea", BasePrice: 2.50},
 	}
 
 	r := mux.NewRouter()
 
-	r.HandleFunc("/menu", getMenuHandler).Methods("GET")
-	r.HandleFunc("/menu/{id}", getDrinkHandler).Methods("GET")
+	r.HandleFunc("/menu", getMenu).Methods("GET")
+	r.HandleFunc("/menu/{id}", getDrink).Methods("GET")
 
-	r.HandleFunc("/orders", getOrdersHandler).Methods("GET")
+	r.HandleFunc("/orders", getOrders).Methods("GET")
 	r.HandleFunc("/orders/{id}", getOrder).Methods("GET")
 	r.HandleFunc("/orders", createOrder).Methods("POST")
 	r.HandleFunc("/orders/{id}/status", updateOrderStatus).Methods("PATCH")
 	r.HandleFunc("/orders/{id}", deleteOrder).Methods("DELETE")
 
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Bienvenue dans l'API Coffee Shop ☕"))
+		w.Write([]byte("API Coffee Shop ☕ — Ready"))
 	})
 
-	fmt.Println("🚀 Serveur lancé sur : http://localhost:8080")
-	http.ListenAndServe(":8080", cors(r))
+	fmt.Println("🚀 Serveur sur http://localhost:8080")
+	http.ListenAndServe(":8080", corsMiddleware(r))
 }
