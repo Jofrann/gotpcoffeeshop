@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"myapi/HTTP-Serveur/Go_API-Coffee-Shop/models"
 	"net/http"
 	"time"
 
+	"Go-TP-API-Coffee-Shop-avec-Mux-/models"
 	"github.com/gorilla/mux"
 )
+
 
 // === Structures ===
 

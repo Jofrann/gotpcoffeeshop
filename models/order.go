@@ -1,30 +1,26 @@
 package models
 
-import (
-	"time"
-)
+import "time"
 
 type OrderStatus string
 
 const (
-	StatusPending   OrderStatus = "pending"
-	StatusPreparing OrderStatus = "preparing"
-	StatusReady     OrderStatus = "ready"
-	StatusPickedUp  OrderStatus = "picked-up"
-	StatusCancelled OrderStatus = "cancelled"
+	StatusPending  OrderStatus = "pending"
+	StatusReady    OrderStatus = "ready"
+	StatusPickedUp OrderStatus = "picked-up"
 )
 
 type Order struct {
-	ID           string      `json:"id"`
-	DrinkID      string      `json:"drink_id"`
-	DrinkName    string      `json:"drink_name"`
-	Size         string      `json:"size"`
-	Extras       []string    `json:"extras"`
-	CustomerName string      `json:"customer_name"`
-	Status       OrderStatus `json:"status"`
-	TotalPrice   float64     `json:"total_price"`
-	OrderedAt    time.Time   `json:"ordered_at"`
+	ID         string      `json:"id"`
+	DrinkID    string      `json:"drinkId"`
+	DrinkName  string      `json:"drinkName"`
+	Size       string      `json:"size"`
+	Extras     []string    `json:"extras"`
+	Status     OrderStatus `json:"status"`
+	OrderedAt  time.Time   `json:"orderedAt"`
+	TotalPrice float64     `json:"totalPrice"`
 }
+
 
 // Order représente une commande
 type OrderInput struct {
